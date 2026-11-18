@@ -1,7 +1,7 @@
 """Compute price-based scorefeed fields from Alpaca daily bars (IEX feed).
 Writes signals.json: {"generated":..., "rows": {TICKER: {h, v50, r52, rp, adx, d}}}
 h = 52-week high, v50 = % above/below 50-day average, r52 = 52-week % return,
-rp = % of the 52-week range, adx = ADX(14), d = date of latest bar."""
+rp = % of the 52-week range, adx = ADX(14), pdi/mdi = +DI/-DI(14), d = date of latest bar."""
 import json, os, sys, datetime, urllib.request, urllib.parse
 KEY=os.environ["ALPACA_KEY"]; SEC=os.environ["ALPACA_SECRET"]
 tick=[t.strip() for t in open("feed_tickers.txt") if t.strip()]
@@ -23,6 +23,7 @@ for i in range(0,len(tick),20):
         if not tok: break
 def adx14(h,l,c,n=14):
     if len(c)<2*n+1: return None
+    pi=mi=0.0
     tr=[];pdm=[];mdm=[]
     for i in range(1,len(c)):
         up=h[i]-h[i-1]; dn=l[i-1]-l[i]
@@ -38,7 +39,7 @@ def adx14(h,l,c,n=14):
     if len(dx)<n: return None
     a=sum(dx[:n])/n
     for x in dx[n:]: a=(a*(n-1)+x)/n
-    return a
+    return a,pi,mi          # ADX, +DI, -DI (Wilder 14, latest bar)
 def calc(bl):
     bl=sorted(bl,key=lambda b:b["t"])
     if len(bl)<60: return None
@@ -48,8 +49,9 @@ def calc(bl):
     out={"h":round(hi,2),"v50":round((last/(sum(c[-50:])/50)-1)*100,2),"d":bl[-1]["t"][:10]}
     if hi>lo: out["rp"]=round(max(0,min(100,(last-lo)/(hi-lo)*100)),1)
     if len(bl)>=240: out["r52"]=round((last/w[0]["c"]-1)*100,1)
-    a=adx14(h,l,c)
-    if a is not None: out["adx"]=round(a,1)
+    r=adx14(h,l,c)
+    if r is not None:
+        out["adx"]=round(r[0],1); out["pdi"]=round(r[1],1); out["mdi"]=round(r[2],1)
     return out
 rows={}
 for t in tick:
